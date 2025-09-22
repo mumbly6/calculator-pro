@@ -1,9 +1,10 @@
 streamlit
+plotly
 pandas
 numpy
-plotly
 requests
 streamlit-lottie
+python-dotenv
 
 
 
