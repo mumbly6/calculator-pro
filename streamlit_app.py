@@ -16,7 +16,7 @@ from email.message import EmailMessage
 from datetime import datetime
 from pathlib import Path
 
-# Try to import Lottie helper; if missing, we'll still continue.
+#  import Lottie helper
 try:
     from streamlit_lottie import st_lottie
     LOTTIE_AVAILABLE = True
@@ -49,7 +49,7 @@ lottie_wave = load_lottieurl(LOTTIE_WAVE) if LOTTIE_AVAILABLE else None
 # ----------------------------
 # Page configuration & CSS
 # ----------------------------
-st.set_page_config(page_title="SmartCalc ", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SmartCalc  ", layout="wide", initial_sidebar_state="expanded")
 # Custom CSS for input field styling
 st.markdown(
     """
