@@ -49,7 +49,32 @@ lottie_wave = load_lottieurl(LOTTIE_WAVE) if LOTTIE_AVAILABLE else None
 # ----------------------------
 # Page configuration & CSS
 # ----------------------------
-st.set_page_config(page_title="SmartCalc — Polished", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SmartCalc ", layout="wide", initial_sidebar_state="expanded")
+# Custom CSS for input field styling
+st.markdown(
+    """
+    <style>
+    /* Make text visible inside text inputs and text areas */
+    input, textarea {
+        color: #4db8ff !important;       /* bluish text */
+        font-weight: 500 !important;
+    }
+
+    /* Placeholder text color */
+    ::placeholder {
+        color: #80d4ff !important;       /* lighter blue for placeholder */
+        opacity: 0.8 !important;
+    }
+
+    /* Borders with neon blue glow */
+    input:focus, textarea:focus {
+        border: 2px solid #4db8ff !important;
+        box-shadow: 0 0 10px #4db8ff !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Inject polished dark-neon CSS + animations (not excessive black)
 st.markdown(
