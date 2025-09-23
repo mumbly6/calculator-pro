@@ -1,6 +1,6 @@
 # streamlit_app.py
-# Final polished Streamlit app — dark + neon theme, Lottie, multi-column budgets, multiple chart types
-# Run with: py -m streamlit run streamlit_app.py
+# SmartCalc — Full refined Streamlit app (dark-neon theme, Lottie, budgets in row, charts, audit, networth, feedback)
+# Run: py -m streamlit run streamlit_app.py
 
 import streamlit as st
 import pandas as pd
@@ -8,24 +8,23 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
+import json
 import os
 import random
-import json
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime
-from pathlib import Path
 
-#  import Lottie helper
+# Try to import streamlit-lottie; if missing, app still works with fallbacks
 try:
     from streamlit_lottie import st_lottie
-    LOTTIE_AVAILABLE = True
+    LOTTIE_OK = True
 except Exception:
-    LOTTIE_AVAILABLE = False
+    LOTTIE_OK = False
 
-# ----------------------------
-# Helpers: load lottie by URL
-# ----------------------------
+# -------------------------
+# Lottie loader (safe)
+# -------------------------
 def load_lottieurl(url: str, timeout=6):
     try:
         r = requests.get(url, timeout=timeout)
@@ -35,60 +34,38 @@ def load_lottieurl(url: str, timeout=6):
         return None
     return None
 
-# A few Lottie URLs (change to your favorites)
-LOTTIE_HOME = "https://assets9.lottiefiles.com/packages/lf20_jcikwtux.json"
+# Lottie assets (change if you prefer)
+LOTTIE_WELCOME = "https://assets9.lottiefiles.com/packages/lf20_jcikwtux.json"   # finance growth
 LOTTIE_CHART = "https://assets2.lottiefiles.com/private_files/lf30_editor_z4q6lx8l.json"
 LOTTIE_LOGIN = "https://assets10.lottiefiles.com/packages/lf20_5ngs2ksb.json"
-LOTTIE_WAVE = "https://assets2.lottiefiles.com/packages/lf20_touohxv0.json"
+LOTTIE_AUDIT = "https://assets9.lottiefiles.com/packages/lf20_bhw1ul4g.json"
+LOTTIE_LOGOUT = "https://assets2.lottiefiles.com/private_files/lf30_editor_hx6bn7vg.json"
 
-lottie_home = load_lottieurl(LOTTIE_HOME) if LOTTIE_AVAILABLE else None
-lottie_chart = load_lottieurl(LOTTIE_CHART) if LOTTIE_AVAILABLE else None
-lottie_login = load_lottieurl(LOTTIE_LOGIN) if LOTTIE_AVAILABLE else None
-lottie_wave = load_lottieurl(LOTTIE_WAVE) if LOTTIE_AVAILABLE else None
+lottie_welcome = load_lottieurl(LOTTIE_WELCOME) if LOTTIE_OK else None
+lottie_chart = load_lottieurl(LOTTIE_CHART) if LOTTIE_OK else None
+lottie_login = load_lottieurl(LOTTIE_LOGIN) if LOTTIE_OK else None
+lottie_audit = load_lottieurl(LOTTIE_AUDIT) if LOTTIE_OK else None
+lottie_logout = load_lottieurl(LOTTIE_LOGOUT) if LOTTIE_OK else None
 
-# ----------------------------
-# Page configuration & CSS
-# ----------------------------
-st.set_page_config(page_title="SmartCalc  ", layout="wide", initial_sidebar_state="expanded")
-# Custom CSS for input field styling
+# -------------------------
+# Page config + CSS
+# -------------------------
+st.set_page_config(page_title="SmartCalc", layout="wide", initial_sidebar_state="expanded")
+
+# Inject CSS - dark neon theme, input visibility fixes, animations
 st.markdown(
     """
     <style>
-    /* Make text visible inside text inputs and text areas */
-    input, textarea {
-        color: #4db8ff !important;       /* bluish text */
-        font-weight: 500 !important;
-    }
-
-    /* Placeholder text color */
-    ::placeholder {
-        color: #80d4ff !important;       /* lighter blue for placeholder */
-        opacity: 0.8 !important;
-    }
-
-    /* Borders with neon blue glow */
-    input:focus, textarea:focus {
-        border: 2px solid #4db8ff !important;
-        box-shadow: 0 0 10px #4db8ff !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# Inject polished dark-neon CSS + animations (not excessive black)
-st.markdown(
-    """
-    <style>
-    /* Background gradient, less black, more deep-blue */
-    html, body, [class*="css"]  {
-      background: radial-gradient(circle at 10% 10%, rgba(99,102,241,0.06), transparent 8%),
+    /* Background and base */
+    html, body, [class*="css"] {
+      background: radial-gradient(circle at 10% 10%, rgba(124,58,237,0.06), transparent 8%),
                   radial-gradient(circle at 90% 90%, rgba(6,182,212,0.04), transparent 8%),
                   linear-gradient(180deg,#071033,#0b1023 80%);
       color: #e6eef8;
       font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     }
-    /* Cards */
+
+    /* Card */
     .card {
       background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
       border: 1px solid rgba(124,58,237,0.08);
@@ -114,19 +91,36 @@ st.markdown(
     }
     .neon:hover { transform: translateY(-3px); box-shadow: 0 30px 80px rgba(99,102,241,0.18); }
 
-    /* Inputs */
-    input, textarea { background: rgba(255,255,255,0.02) !important; border: 1px solid rgba(255,255,255,0.03) !important; color: #e6eef8 !important; }
+    /* Inputs: make typed text visible and fun bluish/cyan */
+    input[type="text"], input[type="number"], textarea, .stTextInput>div>input, .stTextArea>div>textarea {
+        color: #4ee1ff !important;            /* bright cyan for typed text */
+        background: rgba(255,255,255,0.02) !important;
+        border: 1px solid rgba(255,255,255,0.03) !important;
+    }
+    /* Placeholder color */
+    ::placeholder {
+        color: #80e9ff !important;
+        opacity: 0.8 !important;
+    }
+    /* Focus glow */
+    input:focus, textarea:focus, .stTextInput>div>input:focus, .stTextArea>div>textarea:focus {
+        outline: none !important;
+        border: 2px solid #4ee1ff !important;
+        box-shadow: 0 0 12px rgba(78,225,255,0.16) !important;
+    }
+
+    /* Muted text */
     .muted { color: rgba(230,238,248,0.7); }
 
-    /* Metrics */
-    .metric-big { font-size:22px; font-weight:800; color:#7c3aed; }
-
-    /* tab content anim */
+    /* Small animation for tabs */
     .tab-card { animation: fadeIn .45s ease; }
     @keyframes fadeIn { from {opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
 
-    /* small responsive */
-    @media (max-width: 700px) {
+    /* Header gradients */
+    .title-ghost { background:linear-gradient(90deg,#93c5fd,#7c3aed); -webkit-background-clip:text; color:transparent; font-weight:800; font-size:28px; }
+
+    /* responsive */
+    @media (max-width: 720px) {
       .grid-3 { display:block !important; }
     }
     </style>
@@ -134,9 +128,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ----------------------------
-# Session state initialization
-# ----------------------------
+# -------------------------
+# Session state init
+# -------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user" not in st.session_state:
@@ -153,13 +147,14 @@ if "feedback" not in st.session_state:
     st.session_state.feedback = []
 if "networth" not in st.session_state:
     st.session_state.networth = None
+if "email_errors" not in st.session_state:
+    st.session_state.email_errors = []
 
-# ----------------------------
+# -------------------------
 # Email helper (optional)
-# ----------------------------
+# -------------------------
 def send_admin_email(subject: str, body: str) -> bool:
     try:
-        # prefer Streamlit secrets
         email_user = st.secrets.get("EMAIL_USER") if "EMAIL_USER" in st.secrets else os.environ.get("EMAIL_USER")
         email_pass = st.secrets.get("EMAIL_PASS") if "EMAIL_PASS" in st.secrets else os.environ.get("EMAIL_PASS")
         admin_mail = st.secrets.get("ADMIN_EMAIL") if "ADMIN_EMAIL" in st.secrets else os.environ.get("ADMIN_EMAIL")
@@ -176,31 +171,31 @@ def send_admin_email(subject: str, body: str) -> bool:
             smtp.send_message(msg)
         return True
     except Exception as e:
-        st.session_state.setdefault("email_errors", []).append(str(e))
+        st.session_state.email_errors.append(str(e))
         return False
 
-# ----------------------------
-# Login UI (sidebar)
-# ----------------------------
+# -------------------------
+# Login sidebar (always visible)
+# -------------------------
 def login_sidebar():
     st.sidebar.header("Account")
     if not st.session_state.logged_in:
-        username = st.sidebar.text_input("Username / email", key="login_user")
-        password = st.sidebar.text_input("Password", type="password", key="login_pass")
-        col1, col2 = st.sidebar.columns([1,1])
+        uname = st.sidebar.text_input("Username or Email", key="login_user")
+        p = st.sidebar.text_input("Password", type="password", key="login_pass")
+        col1, col2 = st.sidebar.columns(2)
         if col1.button("Sign in"):
-            if username.strip() == "":
-                st.sidebar.error("Enter a username/email")
+            if uname.strip() == "":
+                st.sidebar.error("Enter username/email")
             else:
-                # trivial 'admin' protection if ADMIN_PASS configured
                 admin_pass = st.secrets.get("ADMIN_PASS") if "ADMIN_PASS" in st.secrets else os.environ.get("ADMIN_PASS")
-                if username.lower() == "admin" and admin_pass and password != admin_pass:
+                if uname.lower() == "admin" and admin_pass and p != admin_pass:
                     st.sidebar.error("Invalid admin password")
                 else:
                     st.session_state.logged_in = True
-                    st.session_state.user = username
-                    st.sidebar.success(f"Signed in as {username}")
-                    send_admin_email("SmartCalc: login", f"User {username} signed in at {datetime.utcnow().isoformat()} UTC")
+                    st.session_state.user = uname
+                    st.sidebar.success(f"Signed in as {uname}")
+                    # notify admin (best effort)
+                    send_admin_email("SmartCalc login", f"User {uname} signed in at {datetime.utcnow().isoformat()} UTC")
         if col2.button("Continue as guest"):
             st.session_state.logged_in = True
             st.session_state.user = "guest"
@@ -209,9 +204,9 @@ def login_sidebar():
         st.sidebar.markdown(f"**Signed in as**  \n{st.session_state.user}")
         if st.sidebar.button("Sign out"):
             tip = random.choice([
-                "Automate 10% of income to savings each month.",
-                "Track subscriptions and remove one unused.",
-                "Keep an emergency fund covering 3 months."
+                "Automate saving 10% of income each month.",
+                "Audit your subscriptions — remove one you don't use.",
+                "Put extra cash into a low-cost index fund."
             ])
             st.sidebar.success("Signed out. Tip: " + tip)
             st.session_state.logged_in = False
@@ -219,12 +214,40 @@ def login_sidebar():
             st.experimental_rerun()
 
 login_sidebar()
+
+# -------------------------
+# Landing content (visible before sign in)
+# -------------------------
+def landing_view():
+    st.markdown("<div class='card tab-card'>", unsafe_allow_html=True)
+    col1, col2 = st.columns([2,1])
+    with col1:
+        st.markdown("<div style='padding:6px'>", unsafe_allow_html=True)
+        st.markdown("<div class='title-ghost'>SmartCalc</div>", unsafe_allow_html=True)
+        st.markdown("<p class='muted'>Welcome — a playful budget tracker with audit tools, beautiful charts, and a neon UI. Sign in (sidebar) or continue as guest to try it out.</p>", unsafe_allow_html=True)
+        st.markdown("<ul class='muted'><li>Budget input tables (row-based)</li><li>Charts: Line, Bar, Pie, Treemap</li><li>Net Worth calculator & Audit tool</li><li>Feedback & export</li></ul>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with col2:
+        try:
+            if LOTTIE_OK and lottie_welcome:
+                st_lottie(lottie_welcome, height=180, key="welcome_l")
+            else:
+                # fallback image-like metric
+                st.markdown("<div style='text-align:center;padding:8px'><div style='font-size:20px;font-weight:700;color:#7c3aed'>Welcome!</div><div class='muted'>Open the sidebar to sign in.</div></div>", unsafe_allow_html=True)
+        except Exception:
+            st.markdown("<div class='muted'>Welcome — open the sidebar to sign in.</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    # quick CTA
+    st.markdown("<div class='card'><div style='display:flex;justify-content:space-between;align-items:center'><div><strong>Try the demo:</strong> click 'Continue as guest' in the sidebar to explore the app.</div><div><button class='neon' onclick=\"window.scrollTo(0, document.body.scrollHeight);\">Explore</button></div></div></div>", unsafe_allow_html=True)
+
+# Show landing and stop if not logged in
 if not st.session_state.logged_in:
+    landing_view()
     st.stop()
 
-# ----------------------------
-# Small helpers
-# ----------------------------
+# -------------------------
+# Helpers for budget entries
+# -------------------------
 def add_budget_entry(kind: str, income_map: dict, expense_map: dict, saving_map: dict):
     total_income = sum(float(v or 0) for v in income_map.values())
     total_expense = sum(float(v or 0) for v in expense_map.values())
@@ -248,44 +271,43 @@ def add_budget_entry(kind: str, income_map: dict, expense_map: dict, saving_map:
     elif kind == "government":
         st.session_state.government_entries.append(entry)
 
-def df_preview(entries: list):
+def df_preview(entries):
     if not entries:
         return pd.DataFrame(columns=["timestamp","total_income","total_expense","total_saving","net","user"])
     df = pd.DataFrame(entries)
     return df[["timestamp","total_income","total_expense","total_saving","net","user"]]
 
-# ----------------------------
-# Header / Hero
-# ----------------------------
-col_left, col_right = st.columns([3,1])
-with col_left:
-    st.markdown(f"<h1 style='margin:0; font-size:32px;'><span style='background:linear-gradient(90deg,#93c5fd,#7c3aed); -webkit-background-clip:text; color:transparent; font-weight:800;'>SmartCalc — Polished</span></h1>", unsafe_allow_html=True)
-    st.markdown("<div class='muted'>Neon-styled, animated finance toolkit — budgets, audits, net-worth and beautiful charts.</div>", unsafe_allow_html=True)
-with col_right:
+# -------------------------
+# Header (after sign-in)
+# -------------------------
+colL, colR = st.columns([3,1])
+with colL:
+    st.markdown("<h1 style='margin:0;'><span class='title-ghost'>SmartCalc</span></h1>", unsafe_allow_html=True)
+    st.markdown("<div class='muted'>Neon-styled budget & audit studio — track budgets, visualize, and audit.</div>", unsafe_allow_html=True)
+with colR:
     total_net = sum(e["net"] for e in (st.session_state.personal_entries + st.session_state.business_entries + st.session_state.government_entries))
-    st.markdown(f"<div class='metric-big'>Total Net (all): <strong>${total_net:,.2f}</strong></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-weight:800;color:#7c3aed;'>Total Net: ${total_net:,.2f}</div>", unsafe_allow_html=True)
 
-st.markdown("---")
-
-# Optional Lottie header
-if LOTTIE_AVAILABLE and lottie_home:
+if LOTTIE_OK and lottie_chart:
     try:
-        st_lottie(lottie_home, height=140, key="l_home")
+        st_lottie(lottie_chart, height=120, key="l_top_chart")
     except Exception:
         pass
 
-# ----------------------------
-# Main tabs
-# ----------------------------
+st.markdown("---")
+
+# -------------------------
+# Main Tabs
+# -------------------------
 tabs = st.tabs(["Budget", "Reports", "Net Worth", "Gov Audit", "Feedback", "Settings"])
 
-# ---------- BUDGET: three columns in a row ----------
+# ---------- BUDGET ----------
 with tabs[0]:
-    st.markdown("<div class='tab-card card'>", unsafe_allow_html=True)
-    st.subheader("Budgets (Personal — Business — Government)")
-    # Three columns in one row
+    st.markdown("<div class='card tab-card'>", unsafe_allow_html=True)
+    st.subheader("Budgets (Personal | Business | Government)")
+    # three column row layout
     c1, c2, c3 = st.columns(3, gap="large")
-    # PERSONAL
+    # Personal
     with c1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.write("### Personal")
@@ -295,16 +317,15 @@ with tabs[0]:
         p_house = st.number_input("Housing", min_value=0.0, format="%.2f", key="p_house")
         p_food = st.number_input("Food", min_value=0.0, format="%.2f", key="p_food")
         p_trans = st.number_input("Transport", min_value=0.0, format="%.2f", key="p_trans")
-        p_emerg = st.number_input("Emergency saving", min_value=0.0, format="%.2f", key="p_emerg")
+        p_save = st.number_input("Savings", min_value=0.0, format="%.2f", key="p_save")
         if st.button("Add Personal Entry", key="add_personal"):
             add_budget_entry("personal",
                              {"Salary": p_salary, "Investments": p_invest, "Other": p_other},
                              {"Housing": p_house, "Food": p_food, "Transport": p_trans},
-                             {"Emergency": p_emerg})
+                             {"Savings": p_save})
             st.success("Personal entry saved")
         st.markdown("</div>", unsafe_allow_html=True)
-
-    # BUSINESS
+    # Business
     with c2:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.write("### Business")
@@ -313,17 +334,16 @@ with tabs[0]:
         b_other = st.number_input("Other revenue", min_value=0.0, format="%.2f", key="b_other")
         b_sal = st.number_input("Salaries", min_value=0.0, format="%.2f", key="b_sal")
         b_inv = st.number_input("Inventory", min_value=0.0, format="%.2f", key="b_inv")
-        b_mkt = st.number_input("Marketing", min_value=0.0, format="%.2f", key="b_mkt")
+        b_mark = st.number_input("Marketing", min_value=0.0, format="%.2f", key="b_mark")
         b_res = st.number_input("Reserves", min_value=0.0, format="%.2f", key="b_res")
         if st.button("Add Business Entry", key="add_business"):
             add_budget_entry("business",
                              {"Sales": b_sales, "Service": b_service, "Other": b_other},
-                             {"Salaries": b_sal, "Inventory": b_inv, "Marketing": b_mkt},
+                             {"Salaries": b_sal, "Inventory": b_inv, "Marketing": b_mark},
                              {"Reserves": b_res})
             st.success("Business entry saved")
         st.markdown("</div>", unsafe_allow_html=True)
-
-    # GOVERNMENT
+    # Government
     with c3:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.write("### Government / Institutional")
@@ -334,7 +354,7 @@ with tabs[0]:
         g_health = st.number_input("Healthcare spend", min_value=0.0, format="%.2f", key="g_health")
         g_infra = st.number_input("Infrastructure spend", min_value=0.0, format="%.2f", key="g_infra")
         g_dev = st.number_input("Development allocations", min_value=0.0, format="%.2f", key="g_dev")
-        if st.button("Add Government Entry", key="add_gov"):
+        if st.button("Add Government Entry", key="add_government"):
             add_budget_entry("government",
                              {"Tax": g_tax, "Grants": g_grant, "Borrowing": g_borrow},
                              {"Education": g_edu, "Healthcare": g_health, "Infrastructure": g_infra},
@@ -344,24 +364,29 @@ with tabs[0]:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("### Recent entries (preview)")
-    rp1, rp2, rp3 = st.columns(3)
-    with rp1:
+    st.markdown("### Recent entries preview")
+    r1, r2, r3 = st.columns(3)
+    with r1:
         st.write("Personal")
         st.dataframe(df_preview(st.session_state.personal_entries).sort_values("timestamp", ascending=False).head(6))
-    with rp2:
+    with r2:
         st.write("Business")
         st.dataframe(df_preview(st.session_state.business_entries).sort_values("timestamp", ascending=False).head(6))
-    with rp3:
+    with r3:
         st.write("Government")
         st.dataframe(df_preview(st.session_state.government_entries).sort_values("timestamp", ascending=False).head(6))
 
-# ---------- REPORTS: multiple chart types ----------
+# ---------- REPORTS ----------
 with tabs[1]:
     st.header("Reports — Line, Pie, Bar, Treemap")
-    # Prepare aggregated dataset
-    def sum_key(entries, k):
-        return float(sum(e.get(k, 0) if isinstance(e.get(k, 0), (int,float)) else 0 for e in entries))
+    def sum_key(entries, key):
+        total = 0.0
+        for e in entries:
+            try:
+                total += float(e.get(key, 0))
+            except Exception:
+                total += 0.0
+        return total
 
     agg = pd.DataFrame({
         "Category": ["Personal", "Business", "Government"],
@@ -377,9 +402,9 @@ with tabs[1]:
     })
 
     if agg[["Income","Expenses","Savings"]].sum().sum() == 0:
-        st.info("No data yet — add entries in Budget tab to see reports.")
+        st.info("No data yet — add entries on the Budget tab to populate charts.")
     else:
-        # TREEMAP — shows distribution across categories & types
+        # Treemap
         treedata = agg.melt(id_vars="Category", value_vars=["Income","Expenses","Savings"], var_name="Type", value_name="Amount")
         fig_tm = px.treemap(treedata, path=['Category','Type'], values='Amount',
                             color='Type', color_discrete_map={"Income":"#06b6d4","Expenses":"#fb7185","Savings":"#34d399"},
@@ -388,63 +413,60 @@ with tabs[1]:
         st.plotly_chart(fig_tm, use_container_width=True)
 
         st.markdown("### Expense breakdown (Pie & Bar)")
-        colp, colb = st.columns(2)
-        # Pie: distribution of expenses by category (personal/business/gov)
-        with colp:
+        cp, cb = st.columns(2)
+        with cp:
             expense_totals = agg[["Category","Expenses"]]
             fig_p = px.pie(expense_totals, names="Category", values="Expenses", hole=0.45, title="Expenses by Category")
             fig_p.update_traces(textinfo="percent+label")
             st.plotly_chart(fig_p, use_container_width=True)
-        # Bar: Income vs Expenses
-        with colb:
+        with cb:
             fig_b = go.Figure()
             fig_b.add_trace(go.Bar(x=agg["Category"], y=agg["Income"], name="Income", marker_color="#06b6d4"))
             fig_b.add_trace(go.Bar(x=agg["Category"], y=agg["Expenses"], name="Expenses", marker_color="#fb7185"))
             fig_b.update_layout(barmode='group', title="Income vs Expenses by Category", margin=dict(t=40))
             st.plotly_chart(fig_b, use_container_width=True)
 
-        # Line: net over entries over time
+        # time series net
         rows = []
         for e in st.session_state.personal_entries:
-            rows.append({"time": e["timestamp"], "net": e["net"], "category": "Personal"})
+            rows.append({"time": e["timestamp"], "net": e["net"], "cat": "Personal"})
         for e in st.session_state.business_entries:
-            rows.append({"time": e["timestamp"], "net": e["net"], "category": "Business"})
+            rows.append({"time": e["timestamp"], "net": e["net"], "cat": "Business"})
         for e in st.session_state.government_entries:
-            rows.append({"time": e["timestamp"], "net": e["net"], "category": "Government"})
+            rows.append({"time": e["timestamp"], "net": e["net"], "cat": "Government"})
         if rows:
             df_ts = pd.DataFrame(rows)
             df_ts['time'] = pd.to_datetime(df_ts['time'])
-            fig_line = px.line(df_ts, x='time', y='net', color='category', markers=True, title="Net over time")
+            fig_line = px.line(df_ts, x='time', y='net', color='cat', markers=True, title="Net over time")
             fig_line.update_layout(margin=dict(t=30,l=0,r=0,b=0))
             st.plotly_chart(fig_line, use_container_width=True)
 
 # ---------- NET WORTH ----------
 with tabs[2]:
-    st.header("Net Worth — playful & informative")
-    with st.form("nw_form"):
-        assets_cash = st.number_input("Cash & Bank", min_value=0.0, format="%.2f", key="nw_cash")
-        assets_invest = st.number_input("Investments", min_value=0.0, format="%.2f", key="nw_invest")
-        assets_property = st.number_input("Property value", min_value=0.0, format="%.2f", key="nw_property")
-        liab_mort = st.number_input("Mortgage", min_value=0.0, format="%.2f", key="nw_mort")
-        liab_loans = st.number_input("Loans", min_value=0.0, format="%.2f", key="nw_loans")
-        submit_nw = st.form_submit_button("Calculate Net Worth")
-        if submit_nw:
-            total_assets = assets_cash + assets_invest + assets_property
-            total_liabs = liab_mort + liab_loans
+    st.header("Net Worth — playful and informative")
+    with st.form("networth_form"):
+        na_cash = st.number_input("Cash & bank", min_value=0.0, format="%.2f", key="na_cash")
+        na_inv = st.number_input("Investments", min_value=0.0, format="%.2f", key="na_inv")
+        na_prop = st.number_input("Property", min_value=0.0, format="%.2f", key="na_prop")
+        nl_mort = st.number_input("Mortgage", min_value=0.0, format="%.2f", key="nl_mort")
+        nl_loans = st.number_input("Loans", min_value=0.0, format="%.2f", key="nl_loans")
+        submitted = st.form_submit_button("Calculate Net Worth")
+        if submitted:
+            total_assets = na_cash + na_inv + na_prop
+            total_liabs = nl_mort + nl_loans
             net = total_assets - total_liabs
             st.session_state.networth = net
             st.success(f"Your net worth: ${net:,.2f}")
-            # fun relative gauge: log-scale between poorest and richest
             richest = 200_000_000_000
             poorest = -1_000_000
             def rel_log(v, lo, hi):
-                v_log = np.log10(max(v,0)+1)
-                lo_log = np.log10(max(lo,0)+1)
-                hi_log = np.log10(max(hi,1)+1)
-                pos = (v_log - lo_log) / max((hi_log - lo_log), 1e-9)
-                return float(np.clip(pos, 0, 1))
-            pct = rel_log(abs(net), poorest, richest) * 100
-            st.markdown(f"**Relative position (log scale vs extremes):** {pct:.2f}%")
+                vlog = np.log10(max(v,0)+1)
+                lolog = np.log10(max(lo,0)+1)
+                hilog = np.log10(max(hi,1)+1)
+                pos = (vlog - lolog) / max((hilog-lolog), 1e-9)
+                return float(np.clip(pos,0,1))
+            pos = rel_log(abs(net), poorest, richest)
+            st.markdown(f"**Relative position (log scale):** {pos*100:.2f}%")
             fig = go.Figure(data=[go.Pie(labels=["You","Gap to richest"], values=[max(net,0)+1, max(richest-max(net,0),0)+1], hole=0.6)])
             fig.update_layout(title_text="Net Worth Relative (toy view)", margin=dict(t=30))
             st.plotly_chart(fig, use_container_width=True)
@@ -453,31 +475,24 @@ with tabs[2]:
 with tabs[3]:
     st.header("Government Audit Tool — structure evidence")
     with st.form("audit_form"):
-        leader_name = st.text_input("Leader name", key="audit_name")
-        office_level = st.selectbox("Office level", ["MCA/Local Rep", "MP", "Senator", "Governor", "President"], key="audit_office")
-        declared_income = st.number_input("Declared income & allowances", min_value=0.0, format="%.2f", key="audit_decl")
-        declared_assets = st.number_input("Declared assets", min_value=0.0, format="%.2f", key="audit_assets")
-        known_contracts = st.number_input("Known related contracts value", min_value=0.0, format="%.2f", key="audit_contracts")
-        claimed_spend = st.number_input("Claimed project spend", min_value=0.0, format="%.2f", key="audit_spend")
-        est_assets = st.number_input("Community-estimated assets", min_value=0.0, format="%.2f", key="audit_est")
-        notes = st.text_area("Notes / links / evidence", key="audit_notes")
+        leader = st.text_input("Leader name", key="audit_leader")
+        office = st.selectbox("Office level", ["MCA/Local Rep","MP","Senator","Governor","President"], key="audit_office")
+        declared_income = st.number_input("Declared income & allowances", min_value=0.0, format="%.2f", key="declared_income")
+        declared_assets = st.number_input("Declared assets", min_value=0.0, format="%.2f", key="declared_assets")
+        known_contracts = st.number_input("Known contracts total", min_value=0.0, format="%.2f", key="known_contracts")
+        claimed_spend = st.number_input("Claimed project spend", min_value=0.0, format="%.2f", key="claimed_spend")
+        est_assets = st.number_input("Community-estimated assets", min_value=0.0, format="%.2f", key="est_assets")
+        notes = st.text_area("Notes / Evidence", key="audit_notes")
         submit_audit = st.form_submit_button("Run Audit")
         if submit_audit:
             declared_capacity = declared_income + declared_assets + 1e-9
             apparent_total = est_assets + known_contracts + claimed_spend
             ratio = apparent_total / declared_capacity if declared_capacity else float("inf")
             audit_entry = {
-                "leader": leader_name,
-                "office": office_level,
-                "declared_income": declared_income,
-                "declared_assets": declared_assets,
-                "known_contracts": known_contracts,
-                "claimed_spend": claimed_spend,
-                "est_assets": est_assets,
-                "notes": notes,
-                "ratio": ratio,
-                "user": st.session_state.user,
-                "timestamp": datetime.utcnow().isoformat()
+                "leader": leader, "office": office, "declared_income": declared_income,
+                "declared_assets": declared_assets, "known_contracts": known_contracts,
+                "claimed_spend": claimed_spend, "est_assets": est_assets, "notes": notes,
+                "ratio": ratio, "user": st.session_state.user, "timestamp": datetime.utcnow().isoformat()
             }
             st.session_state.audits.append(audit_entry)
             st.write(f"Discrepancy ratio (apparent/declared): {ratio:.2f}")
@@ -487,10 +502,9 @@ with tabs[3]:
                 st.warning("Moderate discrepancy — follow-up suggested.")
             else:
                 st.success("No obvious discrepancy from provided numbers.")
-            # Pie to show explained vs unexplained
             used = min(apparent_total, declared_capacity)
             unexplained = max(apparent_total - declared_capacity, 0)
-            fig_a = px.pie(names=["Explained/Used","Unexplained/Excess"], values=[used, unexplained], title=f"{leader_name} — Explained vs Unexplained")
+            fig_a = px.pie(names=["Explained/Used","Unexplained/Excess"], values=[used, unexplained], title=f"{leader} — Explained vs Unexplained")
             st.plotly_chart(fig_a, use_container_width=True)
 
     if st.session_state.audits:
@@ -500,25 +514,26 @@ with tabs[3]:
 
 # ---------- FEEDBACK ----------
 with tabs[4]:
-    st.header("Feedback")
-    fn = st.text_input("Your name (optional)", key="fb_name")
-    fe = st.text_input("Email (optional)", key="fb_email")
-    fm = st.text_area("Message", key="fb_msg")
+    st.header("Feedback & Suggestions")
+    fname = st.text_input("Your name (optional)", key="fb_name")
+    femail = st.text_input("Your email (optional)", key="fb_email")
+    fmsg = st.text_area("Message", key="fb_message")
     if st.button("Send feedback"):
-        if not fm.strip():
-            st.warning("Please write a message first.")
+        if not fmsg.strip():
+            st.warning("Please write a message before sending.")
         else:
-            item = {"name": fn, "email": fe, "message": fm, "ts": datetime.utcnow().isoformat()}
+            item = {"name": fname, "email": femail, "message": fmsg, "ts": datetime.utcnow().isoformat()}
             st.session_state.feedback.append(item)
-            sent = send_admin_email("SmartCalc Feedback", json.dumps(item, indent=2))
+            sent = send_admin_email("SmartCalc feedback", json.dumps(item, indent=2))
             if sent:
-                st.success("Feedback emailed to admin.")
+                st.success("Thanks! Feedback emailed to admin.")
             else:
-                st.success("Feedback saved locally (admin email not configured).")
+                # friendlier local-save message
+                st.success("Feedback saved locally — thank you!")
 
     if st.session_state.feedback:
-        st.markdown("Recent feedback")
-        st.dataframe(pd.DataFrame(st.session_state.feedback).sort_values("ts", ascending=False).head(6))
+        st.markdown("Recent feedback (local)")
+        st.dataframe(pd.DataFrame(st.session_state.feedback).sort_values("ts", ascending=False).head(8))
 
 # ---------- SETTINGS ----------
 with tabs[5]:
@@ -535,4 +550,6 @@ with tabs[5]:
         st.download_button("Download JSON", json.dumps(payload, indent=2), file_name="smartcalc_data.json", mime="application/json")
 
 st.markdown("---")
-st.caption("Polished Streamlit app — configure EMAIL_USER/EMAIL_PASS/ADMIN_EMAIL in secrets to enable admin email notifications.")
+st.caption("SmartCalc — configure EMAIL_USER/EMAIL_PASS/ADMIN_EMAIL in Streamlit secrets or environment variables to enable admin emails.")
+
+         
